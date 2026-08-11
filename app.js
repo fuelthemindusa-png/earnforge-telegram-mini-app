@@ -292,35 +292,66 @@ function addOtherReward(amount, reason) {
 }
 
 // ===============================
-// MONETAG REWARDED INTERSTITIAL
+// MONETAG ADS — ZONE 11556400
 // ===============================
 
-async function showRewardedAd() {
-  if (typeof window.show_11333168 !== "function") {
-    toast("Monetag ad is not ready");
+// Rewarded Interstitial — used for task rewards.
+async function showRewardedInterstitial(label = "Reward") {
+  if (typeof window.show_11556400 !== "function") {
+    toast("Monetag is not ready");
     return false;
   }
 
   try {
-    await window.show_11333168();
+    await window.show_11556400();
+    toast(`${label} unlocked`);
     return true;
   } catch (error) {
-    console.warn("Monetag error:", error);
+    console.warn("Monetag Rewarded Interstitial:", error);
+    toast("Ad unavailable - continuing");
     return false;
   }
 }
 
-async function adBeforeAction(label) {
-  toast("Ad loading...");
-  const shown = await showRewardedAd();
-
-  if (shown) {
-    toast(`${label} unlocked`);
-  } else {
-    toast("Ad unavailable - continuing");
+// Rewarded Popup — used for upgrade purchases.
+async function showRewardedPopup(label = "Upgrade") {
+  if (typeof window.show_11556400 !== "function") {
+    toast("Monetag is not ready");
+    return false;
   }
 
-  return shown;
+  try {
+    await window.show_11556400("pop");
+    toast(`${label} unlocked`);
+    return true;
+  } catch (error) {
+    console.warn("Monetag Rewarded Popup:", error);
+    toast("Ad unavailable - continuing");
+    return false;
+  }
+}
+
+// In-App Interstitial — automatic Monetag placement.
+function initializeInAppInterstitial() {
+  if (typeof window.show_11556400 !== "function") {
+    console.warn("Monetag SDK is not ready for In-App Interstitial");
+    return;
+  }
+
+  try {
+    window.show_11556400({
+      type: "inApp",
+      inAppSettings: {
+        frequency: 2,
+        capping: 0.1,
+        interval: 30,
+        timeout: 5,
+        everyPage: false
+      }
+    });
+  } catch (error) {
+    console.warn("Monetag In-App Interstitial:", error);
+  }
 }
 
 // ===============================
@@ -578,7 +609,7 @@ async function runTask(key) {
       return;
     }
 
-    await adBeforeAction("Boost");
+    await showRewardedInterstitial("Boost");
 
     addOtherReward(
       0.15,
@@ -594,7 +625,7 @@ async function runTask(key) {
   }
 
   if (key === "ad") {
-    await adBeforeAction("Watch & Earn");
+    await showRewardedInterstitial("Watch & Earn");
 
     addOtherReward(
       0.05,
@@ -613,7 +644,7 @@ async function runTask(key) {
     streak: 0.20
   };
 
-  await adBeforeAction(
+  await showRewardedInterstitial(
     key === "check"
       ? "Daily Check-In"
       : "Streak"
@@ -800,7 +831,7 @@ async function buyUpgrade(key, cost) {
     return;
   }
 
-  await adBeforeAction("Upgrade");
+  await showRewardedPopup("Upgrade");
 
   st.balance = +(st.balance - cost).toFixed(2);
 
@@ -1059,3 +1090,6 @@ checkDailyReset();
 checkEnergyReset();
 home();
 updateTimers();
+
+// Start Monetag In-App Interstitial.
+initializeInAppInterstitial();
