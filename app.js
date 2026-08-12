@@ -13,6 +13,71 @@ const screen = document.getElementById("screen");
 const navButtons = [...document.querySelectorAll("nav button")];
 
 // ===============================
+// BACKEND API
+// ===============================
+
+const API_BASE_URL = "https://dyuvorvwhatdcrhnbth.supabase.co/functions/v1/game-api";
+
+function telegramInitData() {
+  return tg?.initData || "";
+}
+
+async function apiRequest(endpoint, method = "POST", body = {}) {
+  const initData = telegramInitData();
+
+  if (!initData) {
+    throw new Error("Open EarnForge inside Telegram. Telegram initData is missing.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, initData })
+  });
+
+  let data = {};
+  try { data = await response.json(); } catch (_) {}
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || `API error (${response.status})`);
+  }
+
+  return data;
+}
+
+function applyServerState(serverState) {
+  if (!serverState) return;
+
+  st.balance = Number(serverState.balance || 0);
+  st.lifetime = Number(serverState.lifetime_earnings || 0);
+  st.tapEarnedToday = Number(serverState.tap_earnings_today || 0);
+  st.energy = Number(serverState.energy || 0);
+  st.maxEnergy = Number(serverState.max_energy || BASE_MAX_ENERGY);
+  st.lastEnergyReset = new Date(serverState.last_energy_reset).getTime();
+
+  st.upgrades.power = Number(serverState.power_level || 0);
+  st.upgrades.energy = Number(serverState.energy_level || 0);
+  st.upgrades.recharge = Number(serverState.recharge_level || 0);
+
+  st.streak = Number(serverState.streak || 0);
+  st.tapResetKey = getTapCycleKey(new Date(serverState.tap_cycle_start));
+
+  save();
+}
+
+async function syncServerState() {
+  const data = await apiRequest("state", "POST");
+  applyServerState(data.state);
+  return data.state;
+}
+
+async function serverTap() {
+  const data = await apiRequest("tap", "POST");
+  applyServerState(data.state);
+  return data;
+}
+
+// ===============================
 // GAME RULES
 // ===============================
 
@@ -358,7 +423,16 @@ function initializeInAppInterstitial() {
 // HOME
 // ===============================
 
-function home() {
+async function home() {
+  try {
+    if (telegramInitData()) {
+      await syncServerState();
+    }
+  } catch (error) {
+    console.warn("Backend state sync failed:", error);
+    toast(error.message);
+  }
+
   checkDailyReset();
   checkEnergyReset();
   setNav("home");
@@ -475,9 +549,28 @@ function home() {
     </p>
   `;
 
-  document.getElementById("core").onclick = () => {
-    if (addTapReward()) {
-      home();
+  document.getElementById("core").onclick = async () => {
+    const core = document.getElementById("core");
+
+    if (!telegramInitData()) {
+      toast("Open EarnForge inside Telegram");
+      return;
+    }
+
+    core.disabled = true;
+
+    try {
+      const result = await serverTap();
+
+      if (result.ok) {
+        toast(`+${money(result.reward)}`);
+        await home();
+      }
+    } catch (error) {
+      console.error("Tap error:", error);
+      toast(error.message || "Tap failed");
+    } finally {
+      core.disabled = false;
     }
   };
 }
