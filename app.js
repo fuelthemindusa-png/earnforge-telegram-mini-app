@@ -92,6 +92,14 @@ async function serverUpgrade(key) {
   return data;
 }
 
+async function serverWithdrawal() {
+  return await apiRequest("withdrawal", "POST");
+}
+
+async function loadWithdrawalStatus() {
+  return await apiRequest("withdrawal-status", "POST");
+}
+
 // ===============================
 // GAME RULES
 // ===============================
@@ -963,24 +971,45 @@ async function buyUpgrade(key, cost) {
 // PROFILE
 // ===============================
 
-function withdraw() {
+async function withdraw() {
   setNav("withdraw");
+
+  try {
+    await syncServerState();
+  } catch (error) {
+    console.error("Withdrawal state sync failed:", error);
+    toast(error.message || "Could not load withdrawal");
+    return;
+  }
 
   const minimum = 100;
   const progress = Math.max(
     0,
     Math.min(100, (st.balance / minimum) * 100)
   );
-  const remaining = Math.max(
-    0,
-    minimum - st.balance
-  );
+  const remaining = Math.max(0, minimum - st.balance);
+
+  let request = null;
+
+  try {
+    const status = await loadWithdrawalStatus();
+    request = status.request || null;
+  } catch (error) {
+    console.warn("Withdrawal status unavailable:", error);
+  }
+
+  const statusText =
+    request?.status === "processing"
+      ? "DEMO REQUEST PROCESSING"
+      : request?.status === "demo_completed"
+        ? "DEMO REQUEST COMPLETED"
+        : null;
 
   screen.innerHTML = `
     <div class="title">Withdrawal</div>
 
     <div class="card full">
-      <span class="label">WITHDRAWAL PROGRESS</span>
+      <span class="label">VIRTUAL WITHDRAWAL PROGRESS</span>
 
       <div class="value">
         ${money(st.balance)} / ${money(minimum)}
@@ -1000,47 +1029,73 @@ function withdraw() {
       ${
         remaining > 0
           ? `<p class="note">
-              You need ${money(remaining)} more in your virtual balance
-              to reach the ${money(minimum)} minimum.
+              ${money(remaining)} more in virtual earnings is needed
+              to reach the ${money(minimum)} demo threshold.
             </p>`
           : `<p class="note success">
-              Your virtual balance has reached the withdrawal threshold.
+              Your virtual balance has reached the demo withdrawal threshold.
             </p>`
       }
     </div>
 
     <div class="card full">
-      <span class="label">MINIMUM WITHDRAWAL</span>
+      <span class="label">MINIMUM VIRTUAL WITHDRAWAL</span>
       <div class="value">${money(minimum)}</div>
 
-      <button
-        class="action"
-        id="withdrawBtn"
-        style="width:100%;margin-top:14px"
-        ${st.balance < minimum ? "disabled" : ""}>
-        ${
-          st.balance < minimum
-            ? "REACH $100 TO WITHDRAW"
-            : "REQUEST WITHDRAWAL"
-        }
-      </button>
+      ${
+        statusText
+          ? `<div class="row" style="margin-top:14px">
+              <div class="main">
+                <b>${statusText}</b>
+                <small>
+                  Submitted ${new Date(request.created_at).toLocaleString()}
+                </small>
+              </div>
+              <strong>DEMO</strong>
+            </div>`
+          : `<button
+              class="action"
+              id="withdrawBtn"
+              style="width:100%;margin-top:14px"
+              ${st.balance < minimum ? "disabled" : ""}>
+              ${
+                st.balance < minimum
+                  ? "REACH $100 TO WITHDRAW"
+                  : "REQUEST DEMO WITHDRAWAL"
+              }
+            </button>`
+      }
 
       <p class="note">
-        This prototype displays virtual game earnings only.
-        No real-money withdrawal or payment is processed by this demo.
+        <b>Virtual game only:</b> this demo does not send money,
+        process payments, or create a real withdrawal. A request only
+        records a simulated “processing” status in the game database.
       </p>
     </div>
   `;
 
   document.getElementById("withdrawBtn")?.addEventListener(
     "click",
-    () => {
-      if (st.balance < minimum) {
-        toast("Minimum withdrawal is $100");
-        return;
-      }
+    async () => {
+      const button = document.getElementById("withdrawBtn");
+      if (button) button.disabled = true;
 
-      toast("Demo withdrawal request submitted");
+      try {
+        const result = await serverWithdrawal();
+        const r = result.request;
+
+        toast(
+          result.already_processing
+            ? "Demo withdrawal is already processing"
+            : "Demo withdrawal request submitted"
+        );
+
+        await withdraw();
+      } catch (error) {
+        console.error("Withdrawal error:", error);
+        toast(error.message || "Withdrawal unavailable");
+        if (button) button.disabled = false;
+      }
     }
   );
 }
