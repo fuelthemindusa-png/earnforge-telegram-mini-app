@@ -16,7 +16,7 @@ const navButtons = [...document.querySelectorAll("nav button")];
 // BACKEND API
 // ===============================
 
-const API_BASE_URL = "https://dyuvorvwhatdcrhnbth.supabase.co/functions/v1/game-api";
+const API_BASE_URL = "https://dyuvorvwhatdcrhnbthh.supabase.co/functions/v1/game-api";
 
 function telegramInitData() {
   return tg?.initData || "";
