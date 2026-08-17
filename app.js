@@ -430,9 +430,9 @@ function initializeInAppInterstitial() {
     window.show_11556400({
       type: "inApp",
       inAppSettings: {
-        frequency: 2,
+        frequency: 1,
         capping: 0.1,
-        interval: 30,
+        interval: 60,
         timeout: 5,
         everyPage: false
       }
@@ -483,7 +483,7 @@ async function home() {
       </div>
 
       <div class="sub">
-        VIRTUAL EARNINGS • NO CASH VALUE
+       
       </div>
 
       <div class="stats">
@@ -656,7 +656,7 @@ async function tasks() {
     ${task("🔥", "Daily Streak", "Maintain your streak", 0.20, "streak", status.streak)}
 
     <p class="note">
-      Rewards are virtual game values. Tap earnings have the separate $5 daily tap limit.
+      Tap earnings have the separate $5 daily tap limit.
     </p>
   `;
 
@@ -791,7 +791,7 @@ function upgrades() {
     </div>
 
     <p class="note">
-      An ad is shown before each upgrade purchase.
+    
     </p>
 
     <div class="upgrade">
@@ -1000,16 +1000,16 @@ async function withdraw() {
 
   const statusText =
     request?.status === "processing"
-      ? "DEMO REQUEST PROCESSING"
+      ? "REQUEST PROCESSING"
       : request?.status === "demo_completed"
-        ? "DEMO REQUEST COMPLETED"
+        ? "REQUEST COMPLETED"
         : null;
 
   screen.innerHTML = `
     <div class="title">Withdrawal</div>
 
     <div class="card full">
-      <span class="label">VIRTUAL WITHDRAWAL PROGRESS</span>
+      <span class="label">WITHDRAWAL PROGRESS</span>
 
       <div class="value">
         ${money(st.balance)} / ${money(minimum)}
@@ -1029,17 +1029,17 @@ async function withdraw() {
       ${
         remaining > 0
           ? `<p class="note">
-              ${money(remaining)} more in virtual earnings is needed
-              to reach the ${money(minimum)} demo threshold.
+              ${money(remaining)} more in earnings is needed
+              to reach the ${money(minimum)} threshold.
             </p>`
           : `<p class="note success">
-              Your virtual balance has reached the demo withdrawal threshold.
+              Your balance has reached the withdrawal threshold.
             </p>`
       }
     </div>
 
     <div class="card full">
-      <span class="label">MINIMUM VIRTUAL WITHDRAWAL</span>
+      <span class="label">MINIMUM WITHDRAWAL</span>
       <div class="value">${money(minimum)}</div>
 
       ${
@@ -1051,7 +1051,7 @@ async function withdraw() {
                   Submitted ${new Date(request.created_at).toLocaleString()}
                 </small>
               </div>
-              <strong>DEMO</strong>
+              <strong></strong>
             </div>`
           : `<button
               class="action"
@@ -1061,15 +1061,13 @@ async function withdraw() {
               ${
                 st.balance < minimum
                   ? "REACH $100 TO WITHDRAW"
-                  : "REQUEST DEMO WITHDRAWAL"
+                  : "REQUEST WITHDRAWAL"
               }
             </button>`
       }
 
       <p class="note">
-        <b>Virtual game only:</b> this demo does not send money,
-        process payments, or create a real withdrawal. A request only
-        records a simulated “processing” status in the game database.
+      
       </p>
     </div>
   `;
@@ -1086,8 +1084,8 @@ async function withdraw() {
 
         toast(
           result.already_processing
-            ? "Demo withdrawal is already processing"
-            : "Demo withdrawal request submitted"
+            ? "Withdrawal is already processing"
+            : "Withdrawal request submitted"
         );
 
         await withdraw();
@@ -1166,7 +1164,7 @@ function profile() {
       </div>
 
       <p class="note">
-        Current values are virtual game values.
+      
       </p>
     </div>
   `;
