@@ -141,8 +141,8 @@ const defaultState = {
   maxEnergy: BASE_MAX_ENERGY,
   lastEnergyReset: Date.now(),
 
-  level: 12,
-  streak: 12,
+  level: 0,
+  streak: 0,
   lastBoost: 0,
 
   upgrades: {
