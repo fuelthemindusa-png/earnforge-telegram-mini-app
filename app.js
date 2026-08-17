@@ -86,6 +86,12 @@ async function serverTask(key) {
   return data;
 }
 
+async function serverUpgrade(key) {
+  const data = await apiRequest("upgrade", "POST", { upgrade: key });
+  applyServerState(data.state);
+  return data;
+}
+
 // ===============================
 // GAME RULES
 // ===============================
@@ -904,45 +910,49 @@ function upgrades() {
 }
 
 async function buyUpgrade(key, cost) {
-  if (st.balance < cost) {
-    toast("Not enough balance");
+  if (!telegramInitData()) {
+    toast("Open EarnForge inside Telegram");
     return;
   }
 
-  if (
-    key === "recharge" &&
-    currentEnergyResetMs() <= MIN_ENERGY_RESET_MS
-  ) {
-    toast("Minimum recharge time reached");
-    return;
+  // The displayed cost is only UI. The server recalculates the
+  // real price from the stored upgrade level.
+  const button = document.querySelector(`[data-up="${key}"]`);
+  if (button) button.disabled = true;
+
+  try {
+    // Keep your requested Monetag Rewarded Popup before upgrades.
+    const adWatched = await showRewardedPopup("Upgrade");
+    if (!adWatched) {
+      if (button) button.disabled = false;
+      return;
+    }
+
+    const data = await serverUpgrade(key);
+
+    const type = data.upgrade?.type;
+    const level = Number(data.upgrade?.level || 0);
+    const actualCost = Number(data.upgrade?.cost || 0);
+
+    if (type === "power") {
+      toast(`Earning Power: Level ${level} • ${money(currentTapReward())}/tap`);
+    } else if (type === "energy") {
+      toast(`Energy capacity: ${st.maxEnergy}`);
+    } else if (type === "recharge") {
+      toast(`Reset: ${formatResetTime(currentEnergyResetMs())}`);
+    } else {
+      toast(`Upgrade purchased for ${money(actualCost)}`);
+    }
+
+    await home();
+    upgrades();
+  } catch (error) {
+    console.error("Upgrade error:", error);
+    toast(error.message || "Upgrade failed");
+  } finally {
+    const freshButton = document.querySelector(`[data-up="${key}"]`);
+    if (freshButton) freshButton.disabled = false;
   }
-
-  await showRewardedPopup("Upgrade");
-
-  st.balance = +(st.balance - cost).toFixed(2);
-
-  if (key === "power") {
-    st.upgrades.power += 1;
-    toast(`Tap power: ${money(currentTapReward())}`);
-  }
-
-  if (key === "energy") {
-    st.upgrades.energy += 1;
-    st.maxEnergy += nextEnergyGain();
-    st.energy = Math.min(
-      st.maxEnergy,
-      st.energy + ENERGY_UPGRADE_GAIN
-    );
-    toast(`Energy capacity: ${st.maxEnergy}`);
-  }
-
-  if (key === "recharge") {
-    st.upgrades.recharge += 1;
-    toast(`Reset: ${formatResetTime(currentEnergyResetMs())}`);
-  }
-
-  save();
-  upgrades();
 }
 
 // ===============================
