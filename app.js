@@ -60,6 +60,9 @@ function applyServerState(serverState) {
   st.upgrades.recharge = Number(serverState.recharge_level || 0);
 
   st.streak = Number(serverState.streak || 0);
+  st.lastBoost = serverState.last_boost
+    ? new Date(serverState.last_boost).getTime()
+    : 0;
   st.tapResetKey = getTapCycleKey(new Date(serverState.tap_cycle_start));
 
   save();
@@ -73,6 +76,12 @@ async function syncServerState() {
 
 async function serverTap() {
   const data = await apiRequest("tap", "POST");
+  applyServerState(data.state);
+  return data;
+}
+
+async function serverTask(key) {
+  const data = await apiRequest("task", "POST", { task: key });
   applyServerState(data.state);
   return data;
 }
@@ -588,33 +597,34 @@ function formatResetTime(ms) {
 // TASKS
 // ===============================
 
-function tasks() {
-  checkDailyReset();
-  checkEnergyReset();
+async function tasks() {
   setNav("tasks");
 
+  try {
+    await syncServerState();
+  } catch (error) {
+    console.error("Task state sync failed:", error);
+    toast(error.message || "Could not load tasks");
+    return;
+  }
+
   const boostReady =
+    !st.lastBoost ||
     Date.now() - st.lastBoost >= 15 * 60 * 1000;
 
-  screen.innerHTML = `
-    <div class="title">
-      Daily Tasks
-    </div>
+  // Daily task status is loaded from the server. The local flags are
+  // intentionally not trusted for eligibility.
+  const status = await loadTaskStatus();
 
-    ${task(
-      "🎁",
-      "Daily Check-In",
-      "Claim today's reward",
-      0.10,
-      "check"
-    )}
+  screen.innerHTML = `
+    <div class="title">Daily Tasks</div>
+
+    ${task("🎁", "Daily Check-In", "Claim today's reward", 0.10, "check", status.check)}
 
     ${task(
       "⚡",
       "15-Minute Boost",
-      boostReady
-        ? "Reward is ready"
-        : "Return after 15 minutes",
+      boostReady ? "Reward is ready" : "Return after 15 minutes",
       0.15,
       "boost",
       !boostReady
@@ -625,28 +635,36 @@ function tasks() {
       "Watch & Earn",
       "Watch a rewarded ad",
       0.05,
-      "ad"
+      "ad",
+      false
     )}
 
-    ${task(
-      "🔥",
-      "Daily Streak",
-      "Maintain your streak",
-      0.20,
-      "streak"
-    )}
+    ${task("🔥", "Daily Streak", "Maintain your streak", 0.20, "streak", status.streak)}
 
     <p class="note">
-      An ad is shown before each task reward. These rewards do not reduce the $5 tap allowance.
+      Rewards are virtual game values. Tap earnings have the separate $5 daily tap limit.
     </p>
   `;
 
-  document
-    .querySelectorAll("[data-task]")
-    .forEach(button => {
-      button.onclick = () =>
-        runTask(button.dataset.task);
-    });
+  document.querySelectorAll("[data-task]").forEach(button => {
+    button.onclick = () => runTask(button.dataset.task);
+  });
+}
+
+async function loadTaskStatus() {
+  try {
+    const data = await apiRequest("task-status", "POST");
+    return {
+      check: !!data.status?.check,
+      streak: !!data.status?.streak
+    };
+  } catch (error) {
+    console.error("Task status error:", error);
+    return {
+      check: false,
+      streak: false
+    };
+  }
 }
 
 function task(
@@ -693,67 +711,42 @@ function task(
 }
 
 async function runTask(key) {
-  if (key === "boost") {
-    if (
-      Date.now() - st.lastBoost <
-      15 * 60 * 1000
-    ) {
-      toast("Boost not ready");
-      return;
+  if (!telegramInitData()) {
+    toast("Open EarnForge inside Telegram");
+    return;
+  }
+
+  const buttons = [...document.querySelectorAll(`[data-task="${key}"]`)];
+  buttons.forEach(b => b.disabled = true);
+
+  try {
+    // The ad is shown before the reward request. If the ad fails, do not
+    // grant the reward. The backend remains authoritative for eligibility.
+    if (key === "ad" || key === "check" || key === "boost" || key === "streak") {
+      const adShown = await showRewardedInterstitial(
+        key === "check" ? "Daily Check-In" :
+        key === "boost" ? "Boost" :
+        key === "streak" ? "Streak" :
+        "Watch & Earn"
+      );
+
+      if (!adShown) {
+        return;
+      }
     }
 
-    await showRewardedInterstitial("Boost");
+    const result = await serverTask(key);
 
-    addOtherReward(
-      0.15,
-      "15-minute boost"
-    );
-
-    st.lastBoost = Date.now();
-    st.tasks.boost = true;
-
-    save();
-    tasks();
-    return;
+    if (result.ok) {
+      toast(`+${money(result.reward)} virtual`);
+      await tasks();
+    }
+  } catch (error) {
+    console.error("Task error:", error);
+    toast(error.message || "Task unavailable");
+  } finally {
+    buttons.forEach(b => b.disabled = false);
   }
-
-  if (key === "ad") {
-    await showRewardedInterstitial("Watch & Earn");
-
-    addOtherReward(
-      0.05,
-      "Ad reward"
-    );
-
-    st.tasks.ad = true;
-
-    save();
-    tasks();
-    return;
-  }
-
-  const rewards = {
-    check: 0.10,
-    streak: 0.20
-  };
-
-  await showRewardedInterstitial(
-    key === "check"
-      ? "Daily Check-In"
-      : "Streak"
-  );
-
-  addOtherReward(
-    rewards[key],
-    key === "check"
-      ? "Daily check-in"
-      : "Streak bonus"
-  );
-
-  st.tasks[key] = true;
-
-  save();
-  tasks();
 }
 
 // ===============================
