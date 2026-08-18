@@ -75,9 +75,32 @@ async function syncServerState() {
 }
 
 async function serverTap() {
-  const data = await apiRequest("tap", "POST");
-  applyServerState(data.state);
-  return data;
+  try {
+    const requestId =
+      crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const data = await apiRequest(
+      "tap",
+      "POST",
+      {
+        requestId
+      }
+    );
+
+    if (!data?.ok) {
+      throw new Error(data?.error || "Tap failed");
+    }
+
+    applyServerState(data.state);
+
+    return data;
+
+  } catch (error) {
+    console.error("Tap error:", error);
+    showToast(error.message || "Tap failed");
+    return null;
+  }
 }
 
 async function serverTask(key) {
